@@ -1,5 +1,6 @@
 import random
 import webbrowser
+import psycopg2
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
 from django.conf import settings
@@ -8,6 +9,9 @@ answers = ['Я не понял, что ты хочешь сказать.', 'Из
            'Мой разработчик не говорил, что отвечать в такой ситуации... >_<']
 
 bot = AsyncTeleBot(settings.TOKEN_BOT)
+
+conn = psycopg2.connect(dbname='telegram_pizza', user='Viper', password='', host='127.0.0.1', port='5432')
+cur = conn.cursor()
 
 @bot.message_handler(commands=['start'])
 async def welcome(message):
@@ -18,7 +22,6 @@ async def welcome(message):
     button4 = types.KeyboardButton('🗑 Корзина')
     markup.row(button1, button4)
     markup.row(button2, button3)
-
     if message.text == '/start':
         await bot.send_message(message.chat.id, f'Привет, {message.from_user.first_name}! У меня ты сможешь купить '
                                                 f'пиццу!', reply_markup=markup)

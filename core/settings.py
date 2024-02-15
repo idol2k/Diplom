@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/5.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
-
+from datetime import timedelta
 from pathlib import Path
 from environs import Env
 
@@ -45,24 +45,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'core.apps.bot',
     'core.apps.management',
-    'rest_framework_jwt'
 ]
 
-REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
-    ),
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_jwt.authentication.JSONWebTokenAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
-    ),
-}
-
-JWT_AUTH = {
-    'JWT_SECRET_KEY': 'tg_pizza',
-    'JWT_ALGORITHM': 'HS256',
-}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
