@@ -5,6 +5,7 @@ from telebot import types
 from telebot.async_telebot import AsyncTeleBot
 from django.conf import settings
 
+
 answers = ['Я не понял, что ты хочешь сказать.', 'Извини, я тебя не понимаю.', 'Я не знаю такой команды.',
            'Мой разработчик не говорил, что отвечать в такой ситуации... >_<']
 
@@ -13,8 +14,31 @@ bot = AsyncTeleBot(settings.TOKEN_BOT)
 conn = psycopg2.connect(dbname='telegram_pizza', user='Viper', password='', host='127.0.0.1', port='5432')
 cur = conn.cursor()
 
+
 @bot.message_handler(commands=['start'])
 async def welcome(message):
+    user_id = message.chat.id
+    cur.execute("SELECT id FROM bot_users WHERE id = %s", (user_id,))
+    user_exists = cur.fetchone()
+    if message.text == '/start' and not user_exists:
+        await bot.send_message(user_id, text="Добро пожаловать! Для регистрации введите команду /register")
+    else:
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        button1 = types.KeyboardButton('🛍 Каталог пицц')
+        button2 = types.KeyboardButton('⚙️ Настройки')
+        button3 = types.KeyboardButton('📄 Справка')
+        button4 = types.KeyboardButton('🗑 Корзина')
+        markup.row(button1, button4)
+        markup.row(button2, button3)
+        await bot.send_message(user_id, 'Привет, можете заказывать покушать!', reply_markup=markup)
+
+
+@bot.message_handler(commands=['register'])
+async def register_user(message):
+    user_id = message.chat.id
+    cur.execute("INSERT INTO bot_users (id, name) VALUES (%s, %s) ON CONFLICT DO NOTHING", (user_id, ''))
+    conn.commit()
+
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     button1 = types.KeyboardButton('🛍 Каталог пицц')
     button2 = types.KeyboardButton('⚙️ Настройки')
@@ -22,11 +46,8 @@ async def welcome(message):
     button4 = types.KeyboardButton('🗑 Корзина')
     markup.row(button1, button4)
     markup.row(button2, button3)
-    if message.text == '/start':
-        await bot.send_message(message.chat.id, f'Привет, {message.from_user.first_name}! У меня ты сможешь купить '
-                                                f'пиццу!', reply_markup=markup)
-    else:
-        await bot.send_message(message.chat.id, 'Перекинул тебя в главном меню! Выбирай!', reply_markup=markup)
+
+    await bot.send_message(user_id, 'Можете заказывать покушоц :)', reply_markup=markup)
 
 
 @bot.message_handler(content_types='photo')
@@ -64,8 +85,8 @@ async def info(message):
         await bot.send_message(message.chat.id, 'Настройки номер 1...')
     elif message.text == '⚙️ Настройки #2':
         await bot.send_message(message.chat.id, 'Настройки номер 2...')
-    # elif message.text == '💳 Добавить в корзину'
-    #     await pass
+    elif message.text == '💳 Добавить в корзину':
+        await add_to_cart(message)
     elif message.text == '✏️ Написать разработчику':
         webbrowser.open('https://t.me/IDOL2k')
     elif message.text == '↩️ Назад':
@@ -73,7 +94,32 @@ async def info(message):
     elif message.text == '↩️ Назад в меню':
         await welcome(message)
     else:
-        await bot.send_message(message.chat.id, answers[random.randint(0, 3)])
+        await bot.send_message(message.chat.id, answers[random.randint(0, 3)]),
+
+
+@bot.message_handler(func=lambda message: message.text in ['🔹 Пепперони', '🔹 Гавайская', '🔹 Цыпленок кари',
+                                                           '🔹 Бургер-пицца'])
+async def add_to_cart(message):
+    user_id = message.from_user.id
+    pizza_name = message.text
+
+    cur.execute("SELECT * FROM pizza WHERE pizza_name = %s", (pizza_name,))
+    pizza_data = cur.fetchone()
+
+    if pizza_data:
+        product_price = pizza_data['product_price']
+        size = pizza_data['size']
+
+        cur.execute("INSERT INTO orders (user_id, pizza_name, product_price, size) VALUES"
+                    " (%s, %s, %s, %s) RETURNING id",
+                    (user_id, pizza_name, product_price, size))
+        conn.commit()
+
+        await bot.send_message(message.chat.id, f'Пицца успешно добавлена в корзину')
+    else:
+        await bot.send_message(message.chat.id, 'Извините, данная пицца не найдена')
+
+
 
 
 async def goodsChapter(message):
@@ -125,7 +171,7 @@ async def infoSize(message):
 
 async def pepperoni_pizza(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button1 = types.KeyboardButton('💳 Купить')
+    button1 = types.KeyboardButton('💳 Добавить в корзину')
     button2 = types.KeyboardButton('Изменить размер')
     button3 = types.KeyboardButton('↩️ Назад')
     markup.row(button2)
@@ -136,7 +182,7 @@ async def pepperoni_pizza(message):
 
 async def gavaii_pizza(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button1 = types.KeyboardButton('💳 Купить')
+    button1 = types.KeyboardButton('💳 Добавить в корзину')
     button2 = types.KeyboardButton('Изменить размер')
     button3 = types.KeyboardButton('↩️ Назад')
     markup.row(button2)
@@ -147,7 +193,7 @@ async def gavaii_pizza(message):
 
 async def chicken_kari_pizza(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button1 = types.KeyboardButton('💳 Купить')
+    button1 = types.KeyboardButton('💳 Добавить в корзину')
     button2 = types.KeyboardButton('Изменить размер')
     button3 = types.KeyboardButton('↩️ Назад')
     markup.row(button2)
@@ -159,7 +205,7 @@ async def chicken_kari_pizza(message):
 
 async def burger_pizza(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button1 = types.KeyboardButton('💳 Купить')
+    button1 = types.KeyboardButton('💳 Добавить в корзину')
     button2 = types.KeyboardButton('Изменить размер')
     button3 = types.KeyboardButton('↩️ Назад')
     markup.row(button2)
