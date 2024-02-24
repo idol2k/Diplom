@@ -44,10 +44,12 @@ async def welcome(message: types.Message, state: FSMContext):
 
 @dp.message_handler(lambda x: x.text == "Корзина")
 async def show_cart(message: types.Message):
-    reply_delete = types.InlineKeyboardMarkup()
-    reply_delete.add(types.InlineKeyboardButton(text="Удалить", callback_data="delete"))
+    reply = types.InlineKeyboardMarkup()
+    reply = types.InlineKeyboardMarkup()
+    reply.add(types.InlineKeyboardButton(text='Купить', callback_data='buy'))
+    reply.add(types.InlineKeyboardButton(text="Удалить", callback_data="delete"))
     user_id = str(message.chat.id)
-    cars = cur.execute("SELECT * FROM orders WHERE user_id = %s", (user_id,))
+    cur.execute("SELECT * FROM orders WHERE user_id = %s", (user_id,))
     print("asa")
     cart_items = cur.fetchall()
     print(cart_items)
@@ -56,12 +58,14 @@ async def show_cart(message: types.Message):
             await bot.send_message(
                 user_id,
                 f"Пицца: {item[1]}\nРазмер: {item[2]}\nЦена: {item[4]}",
-                reply_markup=reply_delete,
+                reply_markup=reply,
             )
     else:
         await bot.send_message(user_id, "Ваша корзина пуста.")
 
-
+@dp.callback_query_handler(lambda call: call.data.lower() == "buy")
+async def buy(call):
+    webbrowser.open("https://t.me/IDOL2k")
 @dp.callback_query_handler(lambda call: call.data.lower() == "delete")
 async def delete(call):
 
@@ -177,6 +181,7 @@ async def get_info_order(message: types.Message, state: FSMContext):
     conn.commit()
 
     await bot.send_message(message.chat.id, text=f"Успешно добавлено!")
+    await goodsChapter(message, state='FSMContext')
 
 
 @dp.message_handler(lambda message: message.text == "Настройки")
