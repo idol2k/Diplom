@@ -1,9 +1,11 @@
-from django.core.management.base import BaseCommand
-from core.apps.bot.main_bot import bot
-import asyncio
+from aiogram.utils import executor
+from django.core.management import BaseCommand
+from core.apps.bot.main_bot import dp
+
 
 class Command(BaseCommand):
     help = 'Запуск бота'
 
     def handle(self, *args, **options):
-        asyncio.run(bot.polling(non_stop=True))
+        executor.start_polling(dp)
+
