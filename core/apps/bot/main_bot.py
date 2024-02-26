@@ -6,7 +6,6 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.dispatcher import FSMContext
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
-
 storage = MemoryStorage()
 
 bot = Bot(token=TOKEN_BOT)
@@ -16,6 +15,32 @@ conn = psycopg2.connect(
     dbname="telegram_pizza", user="Viper", password="", host="127.0.0.1", port="5432"
 )
 cur = conn.cursor()
+
+
+@dp.message_handler(commands=["register"])
+async def register_user(message: types.Message):
+    try:
+
+        user_id = message.chat.id
+        cur.execute(
+            "INSERT INTO bot_users (id, name) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            (user_id, ""),
+        )
+        conn.commit()
+
+        markup = ReplyKeyboardMarkup(resize_keyboard=True)
+        button1 = KeyboardButton("Каталог пицц")
+        button2 = KeyboardButton("Настройки")
+        button3 = KeyboardButton("Справка")
+        button4 = KeyboardButton("Корзина")
+        markup.row(button1, button4)
+        markup.row(button2, button3)
+
+        await bot.send_message(
+            user_id, "Можете заказывать покушоц :)", reply_markup=markup
+        )
+    except Exception as err:
+        print(err, "1")
 
 
 @dp.message_handler(commands=["start"])
@@ -46,63 +71,46 @@ async def welcome(message: types.Message, state: FSMContext):
 async def show_cart(message: types.Message):
     reply = types.InlineKeyboardMarkup()
     reply = types.InlineKeyboardMarkup()
-    reply.add(types.InlineKeyboardButton(text='Купить', callback_data='buy'))
+    reply.add(types.InlineKeyboardButton(text="Купить", callback_data="buy"))
     reply.add(types.InlineKeyboardButton(text="Удалить", callback_data="delete"))
     user_id = str(message.chat.id)
     cur.execute("SELECT * FROM orders WHERE user_id = %s", (user_id,))
-    print("asa")
     cart_items = cur.fetchall()
-    print(cart_items)
     if cart_items:
         for item in cart_items:
             await bot.send_message(
                 user_id,
-                f"Пицца: {item[1]}\nРазмер: {item[2]}\nЦена: {item[4]}",
+                f"Пицца: {item[1]}\nРазмер: {item[4]}\nЦена: {item[2]}",
                 reply_markup=reply,
             )
     else:
         await bot.send_message(user_id, "Ваша корзина пуста.")
 
+
 @dp.callback_query_handler(lambda call: call.data.lower() == "buy")
 async def buy(call):
     webbrowser.open("https://t.me/IDOL2k")
+
+
 @dp.callback_query_handler(lambda call: call.data.lower() == "delete")
 async def delete(call):
-
     id_user = str(call.message.chat.id)
     cur.execute("DELETE FROM orders WHERE user_id = %s", (id_user,))
     conn.commit()
     msg_id = await bot.send_message(call.message.chat.id, text="Пицца удалена!")
-    print()
     await bot.delete_message(
         chat_id=call.message.chat.id, message_id=msg_id.message_id - 1
     )
 
 
-@dp.message_handler(commands=["register"])
-async def register_user(message: types.Message):
-    try:
+@dp.message_handler(lambda message: message.text == "Назад")
+async def back_on_list(message: types.Message):
+    await goodsChapter(message, state="FSMContext")
 
-        user_id = message.chat.id
-        cur.execute(
-            "INSERT INTO bot_users (id, name) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (user_id, ""),
-        )
-        conn.commit()
 
-        markup = ReplyKeyboardMarkup(resize_keyboard=True)
-        button1 = KeyboardButton("Каталог пицц")
-        button2 = KeyboardButton("Настройки")
-        button3 = KeyboardButton("Справка")
-        button4 = KeyboardButton("Корзина")
-        markup.row(button1, button4)
-        markup.row(button2, button3)
-
-        await bot.send_message(
-            user_id, "Можете заказывать покушоц :)", reply_markup=markup
-        )
-    except Exception as err:
-        print(err, "1")
+@dp.message_handler(lambda message: message.text == "Назад в меню")
+async def back_on_list(message: types.Message):
+    await welcome(message, state="FSMContext")
 
 
 @dp.message_handler(content_types="photo")
@@ -114,7 +122,6 @@ async def get_photo(message):
 
 @dp.message_handler(lambda x: x.text == "Каталог пицц")
 async def goodsChapter(message: types.Message, state: FSMContext):
-
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     button1 = types.KeyboardButton("Пепперони")
     button2 = types.KeyboardButton("Гавайская")
@@ -154,11 +161,41 @@ async def pizza(message: types.Message, state: FSMContext):
         data["pizza"] = message.text
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button1 = types.KeyboardButton("Добавить в корзину")
+    button1 = types.KeyboardButton("Выбрать размер")
     button2 = types.KeyboardButton("Назад")
     markup.row(button1, button2)
 
     await bot.send_message(message.chat.id, "Выберите действие:", reply_markup=markup)
+
+
+@dp.message_handler(lambda message: message.text == "Выбрать размер")
+async def change(message: types.Message, state: FSMContext):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    button1 = types.KeyboardButton(text="small")
+    button2 = types.KeyboardButton(text="medium")
+    button3 = types.KeyboardButton(text="large")
+    markup.row(button1, button2, button3)
+    await bot.send_message(
+        message.chat.id, text=f"Выберите желаемый размер пиццы!", reply_markup=markup
+    )
+
+
+@dp.message_handler(lambda message: message.text in ["small", "medium", "large"])
+async def change_size(message: types.Message, state: FSMContext):
+    size = message.text
+    async with state.proxy() as data:
+        data["size"] = message.text
+
+    cur.execute("SELECT price FROM bot_pizza WHERE size = %s", (size,))
+    cur.fetchone()
+
+    conn.commit()
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    button1 = types.KeyboardButton(text="Добавить в корзину")
+    markup.row(button1)
+    await bot.send_message(
+        message.chat.id, text=f"Размер пиццы изменен!", reply_markup=markup
+    )
 
 
 @dp.message_handler(lambda message: message.text == "Добавить в корзину")
@@ -166,22 +203,28 @@ async def get_info_order(message: types.Message, state: FSMContext):
     pizza_name = message.text
     async with state.proxy() as data:
         pizza = data["pizza"]
-
+        size = data["size"]
     cur.execute(
         "SELECT ingredients FROM bot_pizza WHERE pizza_name = %s", (pizza_name,)
     )
     cur.fetchone()
-    cur.execute("SELECT * FROM bot_pizza WHERE pizza_name = %s", (pizza,))
+    cur.execute(
+        "SELECT * FROM bot_pizza WHERE pizza_name = %s and size = %s",
+        (
+            pizza,
+            size,
+        ),
+    )
     pizza_info = cur.fetchone()
     cur.execute(
         "INSERT INTO orders (user_id, pizza_name, product_price, size) VALUES (%s, %s, %s, %s) ON CONFLICT DO "
         "NOTHING",
-        (message.chat.id, pizza_info[1], pizza_info[2], pizza_info[3]),
+        (message.chat.id, pizza_info[1], pizza_info[3], pizza_info[2]),
     )
     conn.commit()
 
     await bot.send_message(message.chat.id, text=f"Успешно добавлено!")
-    await goodsChapter(message, state='FSMContext')
+    await goodsChapter(message, state)
 
 
 @dp.message_handler(lambda message: message.text == "Настройки")
@@ -221,17 +264,3 @@ async def info(message):
 
     elif message.text == "Настройки #2":
         await bot.send_message(message.chat.id, "Настройки номер 2...")
-
-
-@dp.message_handler(lambda message: message.text == "Назад")
-async def back_on_list(message: types.Message):
-    await goodsChapter(message, state=FSMContext)
-
-
-@dp.message_handler(lambda message: message.text == "Назад в меню")
-async def back_on_list(message: types.Message):
-    await welcome(message, state=FSMContext)
-
-
-async def back_on_list(message: types.Message):
-    await welcome(message, state=FSMContext)
